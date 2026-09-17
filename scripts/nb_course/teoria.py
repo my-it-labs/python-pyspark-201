@@ -291,7 +291,9 @@ print("count sigue siendo", orders.count())  # 800: tipar ≠ filtrar"""
         md(
             """En los labs vas a repetir esta idea con líneas (enteros y decimales) y con eventos. El contrato lo escribes tú; Spark no tiene que “acertar” cada mañana.
 
-**Siguiente:** [lab de ingesta](02-lab-ingesta-csv-json.ipynb) — creas tu notebook y cargas las cuatro fuentes."""
+**Siguiente:** [lab de ingesta](02-lab-ingesta-csv-json.ipynb) — creas tu notebook y cargas las cuatro fuentes.
+
+Cuando termines M02 (schema + calidad), hay un **extra** de JSON anidado y dumps CRM que no coinciden: [M08](../M08-json-anidado-schema/01-teoria.ipynb). No sustituye este módulo."""
         ),
     ]
 
@@ -721,5 +723,9 @@ enero = spark.read.parquet(str(dest)).where(col("order_month") == "2024-01")
 enero.explain("formatted")  # busca 2024-01 / PartitionFilters
 print("enero", enero.count(), "total", spark.read.parquet(str(dest)).count())"""
         ),
-        md("**Siguiente:** [lab de parquet](02-lab-parquet-layout.ipynb) sobre el fact real."),
+        md(
+            """**Siguiente:** [lab de parquet](02-lab-parquet-layout.ipynb) sobre el fact real.
+
+**Extra (JSON anidado / CRM legacy):** [M08](../M08-json-anidado-schema/01-teoria.ipynb) — no forma parte del Parquet de ventas."""
+        ),
     ]

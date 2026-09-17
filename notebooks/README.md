@@ -5,6 +5,7 @@ El curso **es** esta carpeta. Cada módulo tiene su directorio. Tú escribes en 
 | Carpeta | Qué haces |
 |---------|-----------|
 | `M00` … `M07` | Abres `01-teoria.ipynb` (ejecutas aquí) y los `0N-lab-….ipynb` (guion: **creas el tuyo**). |
+| `M08` | Extra: JSON anidado y schema legacy. No bloquea el pipeline. |
 | [`trabajo/`](trabajo/README.md) | **Tu** sitio. Un `.ipynb` por lab, con celdas Markdown + código. |
 | `_qa/` | No lo uses. Batería interna del repo. |
 
@@ -22,6 +23,7 @@ Kernel: **Python (NovaShop)**.
 | [M05 — Ventanas](M05-analisis-avanzado/README.md) | [teoría](M05-analisis-avanzado/01-teoria.ipynb) · [labs](M05-analisis-avanzado/README.md) |
 | [M06 — Ejecución](M06-optimizacion-ejecucion/README.md) | [teoría](M06-optimizacion-ejecucion/01-teoria.ipynb) · [labs](M06-optimizacion-ejecucion/README.md) |
 | [M07 — Parquet](M07-persistencia-datos/README.md) | [teoría](M07-persistencia-datos/01-teoria.ipynb) · [lab](M07-persistencia-datos/02-lab-parquet-layout.ipynb) |
+| [M08 — JSON anidado (extra)](M08-json-anidado-schema/README.md) | [teoría](M08-json-anidado-schema/01-teoria.ipynb) · [lab](M08-json-anidado-schema/02-lab-json-anidado-schema.ipynb) |
 
 ## Tu notebook (todos los labs)
 

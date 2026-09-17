@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from nb_course.common import NB, write_notebook  # noqa: E402
-from nb_course import labs_early, labs_late, m00, teoria  # noqa: E402
+from nb_course import labs_early, labs_late, m00, m08, teoria  # noqa: E402
 
 SPECS = [
     ("M00-entorno-notebooks/01-teoria.ipynb", m00.teoria),
@@ -36,6 +36,8 @@ SPECS = [
     ("M06-optimizacion-ejecucion/03-lab-cache-particionado.ipynb", labs_late.m06_02),
     ("M07-persistencia-datos/01-teoria.ipynb", teoria.m07),
     ("M07-persistencia-datos/02-lab-parquet-layout.ipynb", labs_late.m07_01),
+    ("M08-json-anidado-schema/01-teoria.ipynb", m08.teoria),
+    ("M08-json-anidado-schema/02-lab-json-anidado-schema.ipynb", m08.lab),
 ]
 
 

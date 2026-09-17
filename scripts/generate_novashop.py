@@ -29,14 +29,17 @@ def main() -> None:
     orders = _orders(rng, customers)
     items = _items(rng, orders, products)
     events = _events(rng, customers, products, orders)
+    profiles_v1, profiles_v2, profile_stats = _profiles(rng, customers)
 
     _write_customers(customers)
     _write_products(products)
     _write_orders(orders)
     _write_items(items)
     _write_events(events)
+    _write_jsonl(RAW / "profiles_v1.jsonl", profiles_v1)
+    _write_jsonl(RAW / "profiles_v2.jsonl", profiles_v2)
 
-    counts = _canonical(customers, products, orders, items, events)
+    counts = _canonical(customers, products, orders, items, events, profile_stats)
     out = ROOT / "data" / "CANONICAL_COUNTS.json"
     out.write_text(json.dumps(counts, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(counts, indent=2, ensure_ascii=False))
@@ -189,13 +192,86 @@ def _write_items(rows: list[dict]) -> None:
 
 
 def _write_events(rows: list[dict]) -> None:
-    path = RAW / "events.jsonl"
+    _write_jsonl(RAW / "events.jsonl", rows)
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
     with path.open("w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def _canonical(customers, products, orders, items, events) -> dict:
+_GEO = {
+    "ES": (40.42, -3.70),
+    "FR": (48.86, 2.35),
+    "PT": (38.72, -9.14),
+    "DE": (52.52, 13.40),
+    "IT": (41.90, 12.50),
+}
+_CITY = {"ES": "Madrid", "FR": "Paris", "PT": "Lisboa", "DE": "Berlin", "IT": "Roma"}
+
+
+def _profiles(rng: random.Random, customers: list[dict]) -> tuple[list[dict], list[dict], dict]:
+    """CRM en dos versiones: v1 plano (legacy) y v2 anidado. Solape a medias (migración incompleta)."""
+    v1: list[dict] = []
+    v2: list[dict] = []
+    for c in customers:
+        n = int(c["customer_id"][1:])
+        country = c["country"] or ""
+        if n <= 100:
+            v1.append(
+                {
+                    "customer_id": c["customer_id"],
+                    "fullName": c["full_name"],
+                    "country": country,
+                    "email": f"{c['customer_id'].lower()}@old.novashop.test",
+                }
+            )
+        if n >= 51:
+            geo = _GEO.get(country, _GEO["ES"])
+            empty_preview = 74 <= n <= 79
+            no_addr_country = 66 <= n <= 73
+            email_null = 240 <= n <= 244
+            n_prev = 0 if empty_preview else rng.randint(1, 3)
+            preview = [
+                {"id": f"X{n:04d}{k}", "gmv": round(rng.uniform(5, 90), 2)} for k in range(n_prev)
+            ]
+            v2.append(
+                {
+                    "customer_id": c["customer_id"],
+                    "profile": {
+                        "contact": {
+                            "full_name": c["full_name"],
+                            "email": {
+                                "work": None if email_null else f"{c['customer_id'].lower()}@novashop.test",
+                                "personal": None,
+                            },
+                            "address": {
+                                "city": _CITY.get(country) if country else None,
+                                "country": None if no_addr_country else (country or None),
+                                "geo": {"lat": geo[0], "lon": geo[1]} if country else None,
+                            },
+                        },
+                        "prefs": {"channel": rng.choice(["web", "app"]), "lang": "es"},
+                        "country": country if no_addr_country else None,
+                    },
+                    "orders_preview": preview,
+                    "meta": {"source": {"system": "crm", "version": 2}},
+                }
+            )
+    stats = {
+        "profiles_v1": len(v1),
+        "profiles_v2": len(v2),
+        "profiles_overlap": 50,
+        "profiles_union": 250,
+        "profiles_v2_empty_preview": 6,
+        "profiles_v2_no_address_country": 8,
+        "profiles_v2_email_work_null": 5,
+    }
+    return v1, v2, stats
+
+
+def _canonical(customers, products, orders, items, events, profile_stats) -> dict:
     empty_country = sum(1 for c in customers if not c["country"])
     empty_cust_order = sum(1 for o in orders if not o["CustomerId"])
     orphan_cust_order = sum(1 for o in orders if str(o["CustomerId"]).startswith("CX"))
@@ -225,6 +301,7 @@ def _canonical(customers, products, orders, items, events) -> dict:
         "order_items_discount_gt_1": bad_discount,
         "events": len(events),
         "events_null_customer_id": events_no_cust,
+        **profile_stats,
         "m01_sample_paid": 3,
         "m02_orders_valid_customer_id": len(orders) - empty_cust_order,
         "fact_lines_after_order_inner": 1980,

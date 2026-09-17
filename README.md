@@ -77,6 +77,14 @@ Lees las fuentes reales de NovaShop. Quién decide nombres y tipos: Spark puede 
 
 → [teoría](notebooks/M02-ingesta-preparacion/01-teoria.ipynb) · [ingesta](notebooks/M02-ingesta-preparacion/02-lab-ingesta-csv-json.ipynb) · [schema](notebooks/M02-ingesta-preparacion/03-lab-schema-tipos.ipynb) · [calidad](notebooks/M02-ingesta-preparacion/04-lab-calidad-limpieza.ipynb)
 
+**Extra — JSON anidado y schema que cambia**
+
+Los alumnos que vienen de CMS/CRM: un JSON de varios niveles, bajarlo a columnas, enriquecerlo y volver a un documento (el que comería una app o un `mongoimport`). Y dos dumps del mismo cliente (2023 plano vs 2024 anidado) cuando la migración se quedó a medias.
+
+No hay Mongo en el Codespace. El artefacto es JSONL. No sustituye el pipeline de pedidos.
+
+→ [teoría](notebooks/M08-json-anidado-schema/01-teoria.ipynb) · [lab](notebooks/M08-json-anidado-schema/02-lab-json-anidado-schema.ipynb)
+
 ### M03 — Transformación de datos
 
 La regla de negocio es una **columna**, no un `for`. Enriqueces el dataset y encadenas transformaciones.

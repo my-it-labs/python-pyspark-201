@@ -15,6 +15,7 @@ Repo público: `my-it-labs/python-pyspark-201`. Codespace = este repo; **no** es
 - `_qa/` no se usa en clase (batería técnica).
 - Tuteo en todo lo publicable. Sin horas, calendario ni «en elaboración».
 - PySpark **3.5.x**, Java 17, `local[*]`. No inventar APIs de Spark 4.
+- Extra M08: JSON anidado + dumps CRM v1/v2 (ficheros). Sin Mongo en el Codespace. No rompe el pipeline `raw` → fact.
 
 ## Dominio
 

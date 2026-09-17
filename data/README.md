@@ -19,6 +19,8 @@ Los recuentos oficiales están en `CANONICAL_COUNTS.json`.
 | `orders.csv` | CSV | 800 | Cabeceras camelCase; 12 sin cliente; 8 clientes huérfanos; 3 fechas `dd/mm/yyyy`; canales mezclados (`WEB`, `App`, `marketplace`) |
 | `order_items.csv` | CSV | 2046 | 21 sin producto; 18 `P999`; 15 `qty=0`; 13 `discount>1`; precio como texto |
 | `events.jsonl` | JSON Lines | 2500 | 80 sin `customer_id` |
+| `profiles_v1.jsonl` | JSON Lines | 100 | CRM 2023 **plano** (`fullName`). Extra M08. |
+| `profiles_v2.jsonl` | JSON Lines | 200 | CRM 2024 **anidado**. 50 ids solapan con v1; 8 sin `address.country`; 6 `orders_preview` vacío; 5 sin email work. |
 
 ## staging/ y curated/
 
