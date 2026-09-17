@@ -4,6 +4,6 @@
 
 | Notebook | Qué haces |
 |----------|-----------|
-| [01-teoria.ipynb](01-teoria.ipynb) | Window: ranking y acumulado. Ejecutas **aquí**. |
-| [02-lab-ranking-ventana.ipynb](02-lab-ranking-ventana.ipynb) | Guion. **Crea** `notebooks/trabajo/M05-01-ranking-ventana.ipynb`. |
-| [03-lab-acumulados.ipynb](03-lab-acumulados.ipynb) | Guion. **Crea** `notebooks/trabajo/M05-02-acumulados.ipynb`. |
+| [01-teoria.ipynb](01-teoria.ipynb) | `groupBy` resume (menos filas); la ventana **deja** cada pedido y añade ranking/acumulado. Ejecutas **aquí**. |
+| [02-lab-ranking-ventana.ipynb](02-lab-ranking-ventana.ipynb) | Guion. **Crea** `notebooks/trabajo/M05-01-ranking-ventana.ipynb`. Cambia el top y quita `partitionBy`. |
+| [03-lab-acumulados.ipynb](03-lab-acumulados.ipynb) | Guion. **Crea** `notebooks/trabajo/M05-02-acumulados.ipynb`. Comprueba que el acumulado no baja. |

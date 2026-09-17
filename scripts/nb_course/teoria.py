@@ -499,45 +499,99 @@ def m05() -> list:
     return [
         md(
             teoria_head(
-                "M05 — Window functions",
-                """`groupBy` **aplasta**: de 4 pedidos pasas a 2 filas (una por cliente) y pierdes el detalle. Una **ventana** calcula algo *usando el vecindario* (el mismo cliente, ordenado por fecha) y **deja las 4 filas**.
+                "M05 — Ranking y acumulados (ventanas)",
+                """En M04 `groupBy` te dio **un número por grupo** (GMV por país, GMV por cliente). Eso está bien para un cuadro de mando. Está mal si la pregunta es: “¿cuál fue el **2.º** pedido de este cliente?” o “¿cuánto llevaba gastado **cuando** compró esto?”.
 
-Eso sirve para “¿cuál es el 2.º pedido de este cliente?” o “¿cuánto lleva gastado hasta esta fecha?”.""",
+Para eso necesitas **seguir viendo cada fila** y, a su lado, un dato que mira a los vecinos (el mismo cliente, ordenados por fecha). Eso es una **ventana**.
+
+El juguete: dos clientes, dos compras cada uno. Mini a propósito. Luego el lab usa NovaShop.""",
                 "../M04-integracion-agregacion/04-lab-segmentacion.ipynb",
                 "02-lab-ranking-ventana.ipynb",
             )
         ),
         *boot_cells("novashop-clase-m05"),
         md(
-            """## Particionar la ventana no es reparticionar el fichero
+            """## Cuatro compras, todavía sueltas
 
-`Window.partitionBy("customer_id")` quiere decir: “el ranking y la suma se reinician **en cada cliente**”. No mueve ficheros en disco (eso es `repartition` / `partitionBy` al escribir, M06–M07).
+Cada fila es **un pedido** (un ticket). `C1` compró en enero (10 €) y en febrero (30 €). `C2` igual, otras fechas.
 
-`orderBy("order_n_ts")` es el eje del tiempo: sin orden, “acumulado” no significa nada.
-
-Al ejecutar verás 4 filas. `C1` tiene `order_n` 1 y 2; su `gmv_running` pasa de 10 a 40. `C2` vuelve a empezar en 1 (no continúa el 3). Si `gmv_running` bajara dentro del mismo cliente, el `orderBy` estaría mal."""
+Al ejecutar: **4 filas**. No hay ranking ni acumulado todavía. Si `count` no es 4, para."""
         ),
         code(
             """from pyspark.sql import Row
 from pyspark.sql.functions import col, row_number, sum as fsum
 from pyspark.sql.window import Window
 
+# 1 fila = 1 pedido (no una línea de producto)
 hist = spark.createDataFrame([
     Row(customer_id="C1", order_id="O1", order_n_ts="2024-01-01", gmv=10.0),
     Row(customer_id="C1", order_id="O2", order_n_ts="2024-02-01", gmv=30.0),
     Row(customer_id="C2", order_id="O3", order_n_ts="2024-01-15", gmv=5.0),
     Row(customer_id="C2", order_id="O4", order_n_ts="2024-03-01", gmv=8.0),
 ])
-# Misma window para el número de pedido y para el acumulado
-w = Window.partitionBy("customer_id").orderBy("order_n_ts")
-(
-    hist.withColumn("order_n", row_number().over(w))  # 1, 2, 1, 2
-    .withColumn("gmv_running", fsum("gmv").over(w))  # 10, 40, 5, 13
-    .orderBy("customer_id", "order_n")
-    .show()
-)"""
+print("filas", hist.count())
+hist.orderBy("customer_id", "order_n_ts").show()"""
         ),
-        md("**Siguiente:** [lab de ranking](02-lab-ranking-ventana.ipynb)."),
+        md(
+            """## `groupBy`: te quedas con el resumen y **tiras** el detalle
+
+Si preguntas “¿cuánto ha gastado cada cliente **en total**?”, `groupBy("customer_id")` es la herramienta. Spark junta las filas del mismo cliente y escribe **una** fila de salida.
+
+Eso es lo que aquí llamamos “aplastar”: no es que Spark rompa nada. Es que **dejas de tener O1 y O2**. Solo queda `C1 → 40 €`. Ya no puedes decir qué pedido fue el primero.
+
+Al ejecutar: **2 filas** (una por cliente). Las columnas `order_id` y `order_n_ts` **no están**. No es un bug: las has fundido en la suma."""
+        ),
+        code(
+            """# Una fila por cliente. O1 y O2 ya no existen como filas.
+totales = hist.groupBy("customer_id").agg(fsum("gmv").alias("gmv_total"))
+print("filas después del groupBy:", totales.count())  # 2
+totales.show()"""
+        ),
+        md(
+            """## Ventana: mismas 4 filas, con una columna extra que **mira al lado**
+
+La pregunta ahora es otra: “en **esta** compra, ¿cuánto llevaba gastado este cliente **hasta aquí**?” y “¿es su pedido nº 1 o nº 2?”.
+
+Una **ventana** no junta filas. Recorre cada fila, mira el vecindario que tú defines, escribe un número **en esa misma fila**.
+
+El vecindario se declara así:
+
+- `partitionBy("customer_id")` — “los vecinos son **solo este cliente**”. `C1` no ve los pedidos de `C2`. Cuando acaba `C1`, el contador **vuelve a 1** en `C2`.
+- `orderBy("order_n_ts")` — “dentro de ese cliente, ordena por fecha”. Sin orden, “acumulado” no significa nada (¿hasta cuándo?).
+
+Al ejecutar: **siguen 4 filas**. `C1` tiene `order_n` 1 y 2; `gmv_running` pasa de 10 a **40**. `C2` **empieza otra vez** en 1 (5, luego 13). Si `C2` saliera 3 y 4, olvidaste el `partitionBy`."""
+        ),
+        code(
+            """# Vecindario: mismo cliente, ordenado por fecha
+w = Window.partitionBy("customer_id").orderBy("order_n_ts")
+ranked = (
+    hist.withColumn("order_n", row_number().over(w))   # 1.er, 2.º pedido de ESE cliente
+    .withColumn("gmv_running", fsum("gmv").over(w))  # suma desde el 1.er pedido hasta ESTE
+)
+print("filas (tienen que seguir siendo 4):", ranked.count())
+ranked.orderBy("customer_id", "order_n").show()"""
+        ),
+        md(
+            """## `partitionBy` de la ventana no es una carpeta en disco
+
+Se parecen las palabras y no son lo mismo:
+
+| Qué escribes | Qué hace |
+|--------------|----------|
+| `Window.partitionBy("customer_id")` | Recorta el **vecindario** del cálculo (por cliente). No crea carpetas. |
+| `repartition` / `write.partitionBy` (M06–M07) | Baraja tareas o **escribe** `order_month=2024-01/` en disco. |
+
+Si `gmv_running` **baja** dentro del mismo cliente, el `orderBy` de la ventana no es la fecha (o está al revés)."""
+        ),
+        md(
+            """## Prueba tú (en este mismo notebook)
+
+1. Copia la celda de la ventana y **borra** `.partitionBy("customer_id")`. Deja solo `Window.orderBy("order_n_ts")`. `order_n` será 1,2,3,4 **en toda la empresa**. `C2` ya no vuelve a 1.
+2. En la ventana **con** `partitionBy`, cambia a `.orderBy(col("order_n_ts").desc())`. El primer `gmv_running` de `C1` dejará de ser 10: estás acumulando desde el pedido **más nuevo**.
+
+Si no cambias nada y solo re-ejecutas, no has comprobado la ventana: has vuelto a ver el mismo `show`."""
+        ),
+        md("**Siguiente:** [lab de ranking](02-lab-ranking-ventana.ipynb). Ahí el top 10 y el top 3 por cliente son la misma idea, a tamaño NovaShop."),
     ]
 
 

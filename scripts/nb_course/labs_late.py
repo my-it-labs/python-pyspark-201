@@ -1,7 +1,7 @@
 """Labs M04–M07: guion paso a paso (tú creas el notebook)."""
 from __future__ import annotations
 
-from .common import CELDA_0, comprueba, errores, lab_abre, md, paso, reto, siguiente
+from .common import CELDA_0, comprueba, errores, lab_abre, md, paso, prueba, reto, siguiente
 
 
 def m04_01() -> list:
@@ -281,15 +281,19 @@ def m05_01() -> list:
                 "M05-01",
                 "Ranking por ventana",
                 "M05-01-ranking-ventana.ipynb",
-                "Obtener el top 10 de clientes por GMV y, por cada cliente, su top 3 productos.",
+                """La misma ventana de la teoría, a tamaño NovaShop: top 10 clientes por GMV y, **dentro de cada cliente**, sus 3 productos que más dinero dejan.
+
+No hace falta memorizar la API. En cada paso: ejecuta → mira `rn` → **cambia un número o quita un `partitionBy`** y vuelve a ejecutar. Si solo pegas, no has visto la ventana.""",
                 "01-teoria.ipynb",
                 "03-lab-acumulados.ipynb",
             )
         ),
         *paso(
                 "1",
-                "Top 10 clientes",
-                "Sin partitionBy el ranking es de toda la compañía. row_number + where rn <= 10.",
+                "Top 10 de la compañía",
+                """Parte de `customer_gmv` (M04-03: una fila por cliente con venta cobrable). Sin `partitionBy`, el ranking es **de toda la empresa**: un solo `rn=1`.
+
+`row_number` pone 1 al GMV más alto (`orderBy desc`), 2 al siguiente, etc. El `where rn <= 10` es el top.""",
                 CELDA_0
                 + """
 
@@ -297,43 +301,94 @@ from pyspark.sql.functions import col, row_number, sum as fsum
 from pyspark.sql.window import Window
 
 spark = get_spark("novashop-m05")
+# Una fila = un cliente (sale de M04-03). Si PATH falla: rehaz ese lab o run_pipeline no basta
+# (customer_gmv lo escribes tú en M04-03).
 cust = spark.read.parquet(str(STAGING / "customer_gmv"))
+print("clientes con GMV cobrable", cust.count())
+
+# Sin partitionBy: un único ranking para toda la tabla
 w_global = Window.orderBy(col("gmv").desc())
-top10 = cust.withColumn("rn", row_number().over(w_global)).where(col("rn") <= 10)
+top10 = (
+    cust.withColumn("rn", row_number().over(w_global))  # 1 = el que más factura
+    .where(col("rn") <= 10)
+)
 top10.orderBy("rn").show()""",
-                "10 filas, `rn` de 1 a 10, GMV decreciente. El nº 1 ronda **6000 €**.",
-                "Si no tienes customer_gmv, rehaz el groupBy de M04-03.",
+                "10 filas, `rn` de 1 a 10, GMV hacia abajo. El nº 1 ronda **6000 €**.",
+                "Si no tienes `customer_gmv`, no es M05: vuelve a M04-03 (groupBy cliente).",
+                if_fail="PATH not found → el Parquet vive en `data/staging/customer_gmv` (lo escribes en el lab de segmentación).",
+            ),
+        *prueba(
+                "Cambia el corte del top",
+                "En la celda de arriba, cambia `<= 10` por `<= 3` y vuelve a ejecutar. Luego prueba `<= 1`.",
+                """print("filas top3", top10.where(col("rn") <= 3).count())  # 3
+# ¿El customer_id del rn=1 sigue siendo el mismo que con top 10?
+top10.where(col("rn") == 1).select("customer_id", "gmv").show()""",
+                "`<= 3` da 3 filas. El nº 1 **no cambia** (solo recortas). Si cambia, reordenaste mal.",
             ),
         *paso(
                 "2",
-                "Top 3 productos por cliente",
-                "partitionBy reinicia el rn en cada cliente. Antes, groupBy cliente+producto (si no, la misma SKU se rankea varias veces).",
+                "Top 3 productos **por** cliente",
+                """Ahora el ranking se **reinicia** en cada persona. Eso es `partitionBy("customer_id")`.
+
+Antes hay que **juntar líneas del mismo producto**: si rankeas el fact a palo seco, la misma SKU sale muchas veces (una por línea). Por eso `groupBy(customer_id, product_id)` y luego la ventana.""",
                 """fact = spark.read.parquet(str(STAGING / "fact_lines"))
 customers = spark.read.parquet(str(STAGING / "customers_clean"))
+
+# Dinero cobrable de cada par cliente+producto (ya no es grano línea)
 product_gmv = (
     fact.join(customers, "customer_id", "inner")
     .where(col("is_billable"))
     .groupBy("customer_id", "product_id")
     .agg(fsum("gmv_line").alias("gmv"))
 )
+
+# El rn vuelve a 1 en CADA customer_id
 w_prod = Window.partitionBy("customer_id").orderBy(col("gmv").desc())
-top3 = product_gmv.withColumn("rn", row_number().over(w_prod)).where(col("rn") <= 3)
+top3 = (
+    product_gmv.withColumn("rn", row_number().over(w_prod))
+    .where(col("rn") <= 3)
+)
+
+# Mira solo al cliente que era nº 1 de la compañía
 top_id = top10.select("customer_id").first()["customer_id"]
-top3.where(col("customer_id") == top_id).show()
-print("filas top3", top3.count())""",
-                "Como mucho 3 filas por cliente; `rn` 1–3. `filas top3` ≤ 211 × 3.",
-                "Elige un customer_id con varios productos: sus rn empiezan en 1, no continúan el ranking global.",
+print("cliente nº 1 de la compañía:", top_id)
+top3.where(col("customer_id") == top_id).orderBy("rn").show()
+print("filas top3 (todos los clientes)", top3.count())""",
+                "Como mucho 3 filas por cliente; `rn` 1–3. `filas top3` ≤ 211 × 3. El nº 1 de *ese* cliente es un producto, no el ranking global.",
+                "Si ves 30 filas del mismo cliente, rankeaste líneas: faltó el groupBy producto.",
+            ),
+        *prueba(
+                "Quita el partitionBy del top 3",
+                "Crea `w_mal = Window.orderBy(col(\"gmv\").desc())` (sin partitionBy), calcula `rn` y filtra `rn <= 3`. Compáralo con `top3`.",
+                """w_mal = Window.orderBy(col("gmv").desc())  # ranking de TODA la empresa
+mal = product_gmv.withColumn("rn", row_number().over(w_mal)).where(col("rn") <= 3)
+print("sin partitionBy, filas", mal.count())  # 3 en total, no 3 por cliente
+mal.show()
+print("con partitionBy, filas", top3.count())""",
+                "Sin `partitionBy`: **3 filas en toda la tabla**. Con él: cientos (3 por cliente). Anota los dos counts en Markdown.",
             ),
         md(
             comprueba(
                 """Elige un `customer_id` con varios productos y mira sus `rn`.
-Empiezan en **1**. Escríbelo en Markdown (id + tres filas)."""
+Empiezan en **1** (no continúan el 1–10 de la compañía). Markdown: id + tres filas.
+
+También: count sin `partitionBy` vs con él (prueba de arriba)."""
             )
         ),
         *reto(
                 "rank vs row_number",
-                "Fuerza un empate (o usa `rank` sobre gmv de clientes) y compara `rank` con `row_number`. Markdown: qué salta y qué no.",
-                "`row_number` nunca empata. `rank` repite y **salta** (1, 2, 2, 4). `dense_rank` no salta (1, 2, 2, 3).",
+                "Sobre `cust`, añade columnas `row_number`, `rank` y `dense_rank` con el mismo `w_global`. Si hay empate de GMV se ve el salto. Markdown: qué salta y qué no.",
+                """```python
+from pyspark.sql.functions import rank, dense_rank
+
+cmp_ = (
+    cust.withColumn("rn", row_number().over(w_global))
+    .withColumn("rk", rank().over(w_global))
+    .withColumn("dr", dense_rank().over(w_global))
+    .orderBy(col("gmv").desc())
+)
+cmp_.select("customer_id", "gmv", "rn", "rk", "dr").show(15)
+```""",
             ),
         md(
             errores(
@@ -341,6 +396,7 @@ Empiezan en **1**. Escríbelo en Markdown (id + tres filas)."""
                     ("Un solo rn=1 en todo el fact", "Olvidaste partitionBy", "Añádelo para “por cliente”"),
                     ("Top 3 con 30 filas del mismo cliente", "Rankeaste líneas", "groupBy cliente+producto antes"),
                     ("Window sin orderBy", "Ranking indefinido", "Siempre ordena la métrica"),
+                    ("No está customer_gmv", "Saltaste M04-03", "Ese lab escribe el Parquet"),
                 ]
             )
         ),
@@ -355,15 +411,19 @@ def m05_02() -> list:
                 "M05-02",
                 "Acumulados por entidad",
                 "M05-02-acumulados.ipynb",
-                "Numerar los pedidos de cada cliente y calcular el GMV cobrable acumulado en el tiempo.",
+                """Numerar los pedidos de cada cliente (`order_n`) y el GMV cobrable **acumulado** en el tiempo (`gmv_running`).
+
+Misma ventana que la teoría: `partitionBy(cliente)` + `orderBy(fecha)`. Si `gmv_running` baja dentro de un cliente, el orden está mal — no lo copies: **compruébalo**.""",
                 "02-lab-ranking-ventana.ipynb",
                 "../M06-optimizacion-ejecucion/01-teoria.ipynb",
             )
         ),
         *paso(
                 "1",
-                "Grano pedido (no línea)",
-                "Un pedido con 3 líneas no es 3 visitas. Agrego a order_id.",
+                "Primero: grano pedido (no línea)",
+                """Un pedido con 3 productos no es 3 visitas. Si rankeas o acumulas el fact a palo seco, `order_n` cuenta **líneas**.
+
+Por eso agrupas a `order_id`: fecha del pedido = `min(order_ts)`, dinero = `sum(gmv_line)`.""",
                 CELDA_0
                 + """
 
@@ -376,18 +436,32 @@ orders_gmv = (
     .where(col("is_billable"))
     .groupBy("customer_id", "order_id")
     .agg(
-        fmin("order_ts").alias("order_ts"),
-        fsum("gmv_line").alias("gmv"),
+        fmin("order_ts").alias("order_ts"),  # un instante por ticket
+        fsum("gmv_line").alias("gmv"),       # dinero de todas las líneas del ticket
     )
 )
-print(orders_gmv.count())""",
-                "**469** pedidos cobrables con cliente (el mismo count que el KPI de M04-02).",
-                "Si te salen 1122, no agregaste a order_id.",
+print("pedidos cobrables con cliente", orders_gmv.count())""",
+                "**469** (el mismo count que el KPI de M04-02). Si salen **1122**, no agregaste a `order_id`: estás en grano línea.",
+                "469 tickets ≠ 1122 líneas. El acumulado “por visita” vive en el ticket.",
+            ),
+        *prueba(
+                "¿Qué pasa si no agrupas?",
+                "Cuenta el fact cobrable+inner **sin** el `groupBy` de `order_id`. Compáralo con 469.",
+                """lineas = (
+    spark.read.parquet(str(STAGING / "fact_lines"))
+    .join(spark.read.parquet(str(STAGING / "customers_clean")), "customer_id", "inner")
+    .where(col("is_billable"))
+)
+print("líneas", lineas.count(), "pedidos distintos", lineas.select("order_id").distinct().count())""",
+                "`líneas` **1122**, `pedidos distintos` **469**. Si usas 1122 como “nº de pedido”, estás inflando visitas.",
             ),
         *paso(
                 "2",
                 "Número de pedido y acumulado",
-                "La misma window sirve para el índice y para el sum. El orderBy de la window ES el tiempo.",
+                """Una sola window para las dos columnas: el vecindario es el cliente; el eje es el tiempo.
+
+`row_number` → 1.er, 2.º, 3.er ticket de **esa** persona.
+`sum(gmv).over(w)` → dinero desde el primer ticket **hasta este** (incluido).""",
                 """from pyspark.sql.window import Window
 
 w = Window.partitionBy("customer_id").orderBy("order_ts")
@@ -396,31 +470,51 @@ hist = (
     .withColumn("gmv_running", fsum("gmv").over(w))
 )
 hist.orderBy("customer_id", "order_n").show(12)""",
-                "`order_n` 1, 2, 3… por cliente; `gmv_running` no decrece dentro del mismo customer_id.",
-                "Si baja, el orderBy de la window no es order_ts.",
+                "`order_n` 1, 2, 3… **por cliente**. `gmv_running` no decrece dentro del mismo `customer_id`.",
+                "Si baja, el `orderBy` de la window no es `order_ts` (o está descendente).",
+            ),
+        *prueba(
+                "Un cliente concreto",
+                "Elige un `customer_id` que en el `show` tenga `order_n` ≥ 2. Filtra solo ese id y mira si la fila 2 tiene `gmv_running` ≥ fila 1. Anota id y las dos filas en Markdown.",
+                """# Cambia el id por uno que hayas visto con varios pedidos
+cid = hist.where(col("order_n") >= 2).select("customer_id").first()["customer_id"]
+print("cliente", cid)
+hist.where(col("customer_id") == cid).orderBy("order_n").show()""",
+                "Al menos dos filas. `gmv_running` de `order_n=2` ≥ el de `order_n=1`. Si no, el orden de la ventana está al revés.",
             ),
         *paso(
                 "3",
                 "Primera compra vs repetición",
-                "order_n == 1 es la definición operativa de “nuevos” en este curso.",
+                """`order_n == 1` es la definición de “nuevo” en este curso: primer ticket cobrable de ese cliente. El resto son repeticiones.""",
                 """hist.groupBy((col("order_n") == 1).alias("is_first")).count().show()""",
-                "~211 primeras compras (un true por cliente con paid) y el resto repeticiones.",
-                "Sin partitionBy el acumulado es de toda la empresa.",
+                "~211 primeras compras (`true`: un cliente con paid) y el resto `false` (repeticiones). 211 + repeticiones = 469.",
+                "Sin `partitionBy`, `order_n=1` sería **una sola fila en toda la empresa**.",
+            ),
+        *prueba(
+                "Ventana de toda la empresa",
+                "Repite el paso 2 con `w_emp = Window.orderBy(\"order_ts\")` (sin partitionBy). Cuenta cuántos `order_n == 1` hay.",
+                """w_emp = Window.orderBy("order_ts")  # un solo ranking temporal global
+hist_emp = orders_gmv.withColumn("order_n", row_number().over(w_emp))
+print("order_n=1 sin partitionBy", hist_emp.where(col("order_n") == 1).count())  # 1
+print("order_n=1 con partitionBy", hist.where(col("order_n") == 1).count())     # ~211""",
+                "Sin `partitionBy`: **1**. Con él: ~**211**. Esa diferencia *es* la ventana.",
             ),
         md(
             comprueba(
-                """En un cliente con `order_n` ≥ 2, `gmv_running` de la fila 2 ≥ fila 1.
-Si baja, corrige el orderBy. Déjalo escrito en Markdown."""
+                """Un cliente con `order_n` ≥ 2: `gmv_running` fila 2 ≥ fila 1. Markdown con el id.
+
+Counts: 469 pedidos; ~211 primeros; `order_n=1` global (sin partitionBy) = 1."""
             )
         ),
         *reto(
                 "Pedidos hasta superar 1000 €",
-                "Quédate, por cliente, con la primera fila donde `gmv_running >= 1000` (o ninguna).",
+                "Quédate, por cliente, con la **primera** fila donde `gmv_running >= 1000` (o ninguna si no llega). Markdown: ¿`order_n` 1 o hace falta el 2.º ticket?",
                 """```python
 w2 = Window.partitionBy("customer_id").orderBy("order_ts")
 crossed = hist.where(col("gmv_running") >= 1000)
 first_cross = crossed.withColumn("rn", row_number().over(w2)).where(col("rn") == 1)
 first_cross.select("customer_id", "order_n", "gmv_running").show()
+print("clientes que cruzan 1000", first_cross.count())
 ```""",
             ),
         md(
@@ -429,12 +523,12 @@ first_cross.select("customer_id", "order_n", "gmv_running").show()
                     ("gmv_running igual en todas las filas", "Window sin orderBy", "partitionBy + orderBy(order_ts)"),
                     ("1122 “pedidos”", "No agregaste a order_id", "Paso 1"),
                     ("Acumulado a nivel empresa", "Falta partitionBy", "Añádelo"),
+                    ("order_n=1 solo una vez", "Ventana global", "partitionBy(customer_id)"),
                 ]
             )
         ),
         md(siguiente("../M06-optimizacion-ejecucion/01-teoria.ipynb", "M06 — teoría")),
     ]
-
 
 def m06_01() -> list:
     return [
