@@ -29,5 +29,5 @@ data/staging/
 data/curated/
 # notebooks/trabajo/*.ipynb
 # !notebooks/trabajo/README.md
-notebooks
+notebooks/
 !notebooks/trabajo/**
