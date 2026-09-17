@@ -161,7 +161,7 @@ def teoria_head(title: str, intro: str, prev: str, nxt: str) -> str:
 
 {intro}
 
-Ejecuta las celdas **aquí**, en este mismo fichero. No lo copies a otro sitio.
+Ejecuta las celdas **aquí**, en este mismo fichero (clase, juntos). Va **montado**: explicación + código + lo que tienes que ver. Lo que construyes tú está en el **lab**.
 
 Kernel: **Python (NovaShop)**.
 """

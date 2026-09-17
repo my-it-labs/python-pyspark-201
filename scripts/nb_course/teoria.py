@@ -584,14 +584,42 @@ Se parecen las palabras y no son lo mismo:
 Si `gmv_running` **baja** dentro del mismo cliente, el `orderBy` de la ventana no es la fecha (o está al revés)."""
         ),
         md(
-            """## Prueba tú (en este mismo notebook)
+            """## Demo: sin `partitionBy` el ranking es de toda la empresa
 
-1. Copia la celda de la ventana y **borra** `.partitionBy("customer_id")`. Deja solo `Window.orderBy("order_n_ts")`. `order_n` será 1,2,3,4 **en toda la empresa**. `C2` ya no vuelve a 1.
-2. En la ventana **con** `partitionBy`, cambia a `.orderBy(col("order_n_ts").desc())`. El primer `gmv_running` de `C1` dejará de ser 10: estás acumulando desde el pedido **más nuevo**.
+Misma tabla, misma fecha, **sin** cortar por cliente. `order_n` numera 1→4 en **todas** las compras, no “el 1.er pedido de C2”.
 
-Si no cambias nada y solo re-ejecutas, no has comprobado la ventana: has vuelto a ver el mismo `show`."""
+Al ejecutar: `C2` ya no vuelve a 1. El acumulado `gmv_running` es el de la compañía (10, 15, 45, 53), no el de cada persona."""
         ),
-        md("**Siguiente:** [lab de ranking](02-lab-ranking-ventana.ipynb). Ahí el top 10 y el top 3 por cliente son la misma idea, a tamaño NovaShop."),
+        code(
+            """# Sin partitionBy: un solo vecindario (toda la tabla)
+w_empresa = Window.orderBy("order_n_ts")
+(
+    hist.withColumn("order_n", row_number().over(w_empresa))
+    .withColumn("gmv_running", fsum("gmv").over(w_empresa))
+    .orderBy("order_n")
+    .show()
+)
+# Demuestra: C2 no reinicia en 1. Eso es “olvidaste partitionBy”."""
+        ),
+        md(
+            """## Demo: `orderBy` al revés acumula desde el pedido más nuevo
+
+Volvemos a cortar por cliente, pero la fecha va **descendente**. El “hasta aquí” ya no es cronológico.
+
+Al ejecutar, en `C1` la primera fila que ves (febrero, 30 €) tiene `gmv_running=30`, no 10. La de enero queda en 40 (30+10). El acumulado **ya no es** “lo que llevaba gastado cuando compró”."""
+        ),
+        code(
+            """# Con partitionBy, orden invertido: el “running” parte del último pedido
+w_rev = Window.partitionBy("customer_id").orderBy(col("order_n_ts").desc())
+(
+    hist.withColumn("order_n", row_number().over(w_rev))
+    .withColumn("gmv_running", fsum("gmv").over(w_rev))
+    .orderBy("customer_id", "order_n")
+    .show()
+)
+# Demuestra: si gmv_running “no cuadra” con la historia, mira el orderBy de la ventana."""
+        ),
+        md("**Siguiente:** [lab de ranking](02-lab-ranking-ventana.ipynb) — ahí cambias tú el top y el `partitionBy`."),
     ]
 
 
